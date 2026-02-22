@@ -90,7 +90,7 @@ if mode == "AI Risk Scoring":
             """
 
             response = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                MODEL = "openai/gpt-oss-120b",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3
             )
@@ -138,7 +138,7 @@ elif mode == "AI Health Chat Assistant":
         }
 
         response = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            MODEL = "openai/gpt-oss-120b",
             messages=[system_prompt] + chat_history,
             temperature=0.5
         )
