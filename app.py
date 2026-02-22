@@ -2,26 +2,119 @@ import streamlit as st
 from groq import Groq
 import os
 import json
+import re
 
-st.set_page_config(page_title="AI Health Intelligence", page_icon="🏥")
+# -----------------------
+# PAGE CONFIG
+# -----------------------
+st.set_page_config(
+    page_title="AI Health Intelligence",
+    page_icon="🏥",
+    layout="wide"
+)
+
+# -----------------------
+# THEME SWITCH
+# -----------------------
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+def toggle_theme():
+    if st.session_state.theme == "dark":
+        st.session_state.theme = "light"
+    else:
+        st.session_state.theme = "dark"
+
+st.sidebar.button("✨ Toggle Glow Theme", on_click=toggle_theme)
+
+dark_mode = st.session_state.theme == "dark"
+
+# -----------------------
+# DYNAMIC CSS
+# -----------------------
+background = "#0e1117" if dark_mode else "#f4f6f9"
+text_color = "#ffffff" if dark_mode else "#000000"
+
+st.markdown(f"""
+<style>
+.main {{
+    background-color: {background};
+    color: {text_color};
+    transition: background-color 0.6s ease;
+}}
+
+.metric-card {{
+    padding: 30px;
+    border-radius: 18px;
+    text-align: center;
+    backdrop-filter: blur(15px);
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    animation: fadeIn 0.8s ease-in-out;
+}}
+
+@keyframes fadeIn {{
+    from {{opacity: 0; transform: translateY(15px);}}
+    to {{opacity: 1; transform: translateY(0);}}
+}}
+
+.pulse {{
+    animation: pulseGlow 1.5s infinite;
+}}
+
+@keyframes pulseGlow {{
+    0% {{ box-shadow: 0 0 10px red; }}
+    50% {{ box-shadow: 0 0 30px red; }}
+    100% {{ box-shadow: 0 0 10px red; }}
+}}
+
+.circular-chart {{
+    display: block;
+    margin: 20px auto;
+    max-width: 200px;
+}}
+
+.circle-bg {{
+    fill: none;
+    stroke: #eee;
+    stroke-width: 3.8;
+}}
+
+.circle {{
+    fill: none;
+    stroke-width: 3.8;
+    stroke-linecap: round;
+    animation: progress 1.5s ease-out forwards;
+}}
+
+@keyframes progress {{
+    from {{ stroke-dasharray: 0 100; }}
+}}
+
+.percentage {{
+    fill: {text_color};
+    font-size: 0.5em;
+    text-anchor: middle;
+}}
+</style>
+""", unsafe_allow_html=True)
 
 st.title("🏥 AI Health Intelligence System")
-st.warning("⚠️ Educational demo only. Not medical advice.")
+st.caption("Next-Gen AI Health Dashboard")
 
-# -------------------------
-# Load API Key
-# -------------------------
+# -----------------------
+# API KEY
+# -----------------------
 api_key = os.environ.get("GROQ_API_KEY")
-
 if not api_key:
-    st.error("Groq API key not found. Add it to Streamlit secrets.")
+    st.error("Groq API key not found.")
     st.stop()
 
 client = Groq(api_key=api_key)
 
-# -------------------------
-# Profile Handling
-# -------------------------
+# -----------------------
+# PROFILE STORAGE
+# -----------------------
 PROFILE_FILE = "profiles.json"
 
 def load_profiles():
@@ -36,16 +129,18 @@ def save_profiles(data):
 
 profiles = load_profiles()
 
-# Sidebar login
+# -----------------------
+# LOGIN
+# -----------------------
 st.sidebar.header("👤 User Profile")
-username = st.sidebar.text_input("Enter Username")
+username = st.sidebar.text_input("Username")
 
 if not username:
     st.stop()
 
 if username not in profiles:
     profiles[username] = {
-        "last_inputs": {},
+        "last_score": 0,
         "last_result": "",
         "chat_history": []
     }
@@ -53,98 +148,112 @@ if username not in profiles:
 
 st.sidebar.success(f"Logged in as {username}")
 
-# Mode selection
-mode = st.sidebar.radio("Select Mode", ["AI Risk Scoring", "AI Health Chat Assistant"])
+mode = st.sidebar.radio("Select Mode", ["Health Risk Analyzer", "Health Chatbot"])
 
-# -------------------------
-# MODE 1: Risk Scoring
-# -------------------------
-if mode == "AI Risk Scoring":
-    st.header("📊 Lifestyle Input")
+# -----------------------
+# CIRCULAR GAUGE FUNCTION
+# -----------------------
+def circular_gauge(score):
+    color = "#00ff99" if score < 30 else "#ffd700" if score < 60 else "#ff4d4d"
+    pulse_class = "pulse" if score >= 60 else ""
 
-    sleep = st.slider("😴 Sleep (hours)", 0, 12, profiles[username]["last_inputs"].get("sleep", 7))
-    exercise = st.slider("🏃 Exercise (days/week)", 0, 7, profiles[username]["last_inputs"].get("exercise", 3))
-    water = st.slider("💧 Water (glasses/day)", 0, 15, profiles[username]["last_inputs"].get("water", 6))
-    screen = st.slider("📱 Screen Time (hours/day)", 0, 16, profiles[username]["last_inputs"].get("screen", 6))
-    stress = st.selectbox(
-        "😰 Stress Level",
-        ["Low", "Medium", "High"],
-        index=["Low","Medium","High"].index(profiles[username]["last_inputs"].get("stress", "Medium"))
-    )
+    gauge_html = f"""
+    <div class="metric-card {pulse_class}">
+    <svg viewBox="0 0 36 36" class="circular-chart">
+      <path class="circle-bg"
+        d="M18 2.0845
+           a 15.9155 15.9155 0 0 1 0 31.831
+           a 15.9155 15.9155 0 0 1 0 -31.831"/>
+      <path class="circle"
+        stroke="{color}"
+        stroke-dasharray="{score}, 100"
+        d="M18 2.0845
+           a 15.9155 15.9155 0 0 1 0 31.831
+           a 15.9155 15.9155 0 0 1 0 -31.831"/>
+      <text x="18" y="20.35" class="percentage">{score}%</text>
+    </svg>
+    </div>
+    """
+    st.markdown(gauge_html, unsafe_allow_html=True)
 
-    if st.button("Analyze Health Risk"):
-        with st.spinner("AI analyzing..."):
-            prompt = f"""
-            Based on:
-            Sleep: {sleep} hours
-            Exercise: {exercise} days/week
-            Water: {water} glasses/day
-            Screen Time: {screen} hours/day
-            Stress: {stress}
+# ============================
+# HEALTH ANALYZER
+# ============================
+if mode == "Health Risk Analyzer":
 
-            Provide:
-            Risk Score (0-100)
-            Risk Level (Low/Moderate/High)
-            Short Explanation
-            3 Recommendations
-            """
+    col1, col2 = st.columns(2)
 
-            response = client.chat.completions.create(
-                model = "openai/gpt-oss-120b",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3
-            )
+    with col1:
+        sleep = st.slider("Sleep (hours)", 0, 12, 7)
+        exercise = st.slider("Exercise (days/week)", 0, 7, 3)
+        water = st.slider("Water (glasses/day)", 0, 15, 6)
 
-            result = response.choices[0].message.content
+    with col2:
+        screen = st.slider("Screen Time (hours/day)", 0, 16, 6)
+        stress = st.selectbox("Stress Level", ["Low", "Medium", "High"])
 
-            # Save profile data
-            profiles[username]["last_inputs"] = {
-                "sleep": sleep,
-                "exercise": exercise,
-                "water": water,
-                "screen": screen,
-                "stress": stress
-            }
-            profiles[username]["last_result"] = result
-            save_profiles(profiles)
+    if st.button("🔍 Analyze Health", use_container_width=True):
 
-            st.subheader("🧠 AI Health Assessment")
-            st.markdown(result)
+        prompt = f"""
+        Sleep: {sleep}
+        Exercise: {exercise}
+        Water: {water}
+        Screen: {screen}
+        Stress: {stress}
 
-    if profiles[username]["last_result"]:
-        st.subheader("📌 Last Saved Assessment")
-        st.markdown(profiles[username]["last_result"])
+        Return:
+        Risk Score: <0-100>
+        Risk Level:
+        Explanation:
+        """
 
-# -------------------------
-# MODE 2: Chat Assistant
-# -------------------------
-elif mode == "AI Health Chat Assistant":
-    st.header("💬 Personal AI Health Assistant")
+        response = client.chat.completions.create(
+            model="llama3-70b-8192",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+
+        result = response.choices[0].message.content
+
+        match = re.search(r"Risk Score:\s*(\d+)", result)
+        score = int(match.group(1)) if match else 0
+
+        profiles[username]["last_score"] = score
+        profiles[username]["last_result"] = result
+        save_profiles(profiles)
+
+        st.divider()
+        st.subheader("📊 Risk Visualization")
+
+        circular_gauge(score)
+
+        st.markdown(result)
+
+# ============================
+# CHATBOT
+# ============================
+elif mode == "Health Chatbot":
+
+    st.subheader("💬 AI Health Assistant")
 
     chat_history = profiles[username]["chat_history"]
 
     for msg in chat_history:
         st.chat_message(msg["role"]).markdown(msg["content"])
 
-    user_input = st.chat_input("Ask something about your health...")
+    user_input = st.chat_input("Ask your health assistant...")
 
     if user_input:
         chat_history.append({"role": "user", "content": user_input})
         st.chat_message("user").markdown(user_input)
 
-        system_prompt = {
-            "role": "system",
-            "content": "You are a helpful health AI assistant. Provide general wellness advice only. No medical diagnosis."
-        }
-
         response = client.chat.completions.create(
-            model = "openai/gpt-oss-120b",
-            messages=[system_prompt] + chat_history,
-            temperature=0.5
+            model="llama3-70b-8192",
+            messages=chat_history,
+            temperature=0.6
         )
 
         reply = response.choices[0].message.content
-
         chat_history.append({"role": "assistant", "content": reply})
         profiles[username]["chat_history"] = chat_history
         save_profiles(profiles)
