@@ -26,7 +26,7 @@ st.sidebar.button("✨ Toggle Glow Theme", on_click=toggle_theme)
 
 dark_mode = st.session_state.theme == "dark"
 
-bg_color = "#0e1117" if dark_mode else "#f5f7fa"
+bg_color = "#0e1117" if dark_mode else "#f4f6f9"
 text_color = "#ffffff" if dark_mode else "#000000"
 
 # -----------------------
@@ -37,7 +37,7 @@ st.markdown(f"""
 .main {{
     background-color: {bg_color};
     color: {text_color};
-    transition: background-color 0.5s ease;
+    transition: background-color 0.6s ease;
 }}
 
 .metric-card {{
@@ -92,6 +92,68 @@ st.markdown(f"""
     fill: {text_color};
     font-size: 0.5em;
     text-anchor: middle;
+}}
+
+.avatar-container {{
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 240px;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    transform-style: preserve-3d;
+    transition: transform 0.3s ease;
+}}
+
+.avatar-container:hover {{
+    transform: rotateY(8deg) rotateX(5deg);
+}}
+
+.avatar-face {{
+    width: 100px;
+    height: 100px;
+    margin: auto;
+    border-radius: 50%;
+    position: relative;
+    animation: breathe 3s infinite ease-in-out;
+}}
+
+@keyframes breathe {{
+    0% {{ transform: scale(1); }}
+    50% {{ transform: scale(1.08); }}
+    100% {{ transform: scale(1); }}
+}}
+
+.eye {{
+    width: 15px;
+    height: 15px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 35px;
+}}
+
+.eye.left {{ left: 25px; }}
+.eye.right {{ right: 25px; }}
+
+.mouth {{
+    width: 40px;
+    height: 20px;
+    border-bottom: 4px solid white;
+    border-radius: 0 0 40px 40px;
+    position: absolute;
+    bottom: 25px;
+    left: 30px;
+}}
+
+.avatar-status {{
+    text-align: center;
+    margin-top: 15px;
+    font-size: 14px;
+    opacity: 0.9;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -208,8 +270,10 @@ if mode == "Health Risk Analyzer":
 
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
-            messages=[{"role": "system", "content": "Structured health analysis AI."},
-                      {"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "Structured health analysis AI."},
+                {"role": "user", "content": prompt}
+            ],
             temperature=0.3
         )
 
@@ -247,8 +311,9 @@ elif mode == "Health Chatbot":
 
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
-            messages=[{"role": "system", "content": "General wellness advice only."}]
-            + chat_history[-10:],
+            messages=[
+                {"role": "system", "content": "General wellness advice only."}
+            ] + chat_history[-10:],
             temperature=0.6
         )
 
@@ -259,3 +324,34 @@ elif mode == "Health Chatbot":
         save_profiles(profiles)
 
         st.chat_message("assistant").markdown(reply)
+
+# -----------------------
+# EMOTION AVATAR
+# -----------------------
+score = profiles[username]["last_score"]
+
+if score < 30:
+    color = "#00ff99"
+    emotion = "😊 Calm & Stable"
+    mouth_style = "border-bottom: 4px solid white;"
+elif score < 60:
+    color = "#ffd700"
+    emotion = "😐 Slightly Alert"
+    mouth_style = "border-bottom: 4px solid white; border-radius: 0;"
+else:
+    color = "#ff4d4d"
+    emotion = "🚨 Elevated Risk"
+    mouth_style = "border-bottom: none; border-top: 4px solid white; border-radius: 40px 40px 0 0;"
+
+avatar_html = f"""
+<div class="avatar-container">
+    <div class="avatar-face" style="background: {color}; box-shadow: 0 0 30px {color};">
+        <div class="eye left"></div>
+        <div class="eye right"></div>
+        <div class="mouth" style="{mouth_style}"></div>
+    </div>
+    <div class="avatar-status">{emotion}</div>
+</div>
+"""
+
+st.markdown(avatar_html, unsafe_allow_html=True)
